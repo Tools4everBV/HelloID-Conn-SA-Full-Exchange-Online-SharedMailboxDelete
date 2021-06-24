@@ -1,0 +1,61 @@
+[
+    {
+        "key":  "searchfield",
+        "templateOptions":  {
+                                "label":  "Search",
+                                "required":  true
+                            },
+        "type":  "input",
+        "summaryVisibility":  "Show",
+        "requiresTemplateOptions":  true,
+        "requiresKey":  true
+    },
+    {
+        "key":  "sharedMailbox",
+        "templateOptions":  {
+                                "label":  "Shared Mailboxes",
+                                "required":  true,
+                                "grid":  {
+                                             "columns":  [
+                                                             {
+                                                                 "headerName":  "Name",
+                                                                 "field":  "name"
+                                                             },
+                                                             {
+                                                                 "headerName":  "Primary Smtp Address",
+                                                                 "field":  "primarySmtpAddress"
+                                                             },
+                                                             {
+                                                                 "headerName":  "Id",
+                                                                 "field":  "id"
+                                                             },
+                                                             {
+                                                                 "headerName":  "User Principal Name",
+                                                                 "field":  "userPrincipalName"
+                                                             }
+                                                         ],
+                                             "height":  300,
+                                             "rowSelection":  "single"
+                                         },
+                                "dataSourceConfig":  {
+                                                         "dataSourceGuid":  "$dataSourceGuid_0",
+                                                         "input":  {
+                                                                       "propertyInputs":  [
+                                                                                              {
+                                                                                                  "propertyName":  "searchValue",
+                                                                                                  "otherFieldValue":  {
+                                                                                                                          "otherFieldKey":  "searchfield"
+                                                                                                                      }
+                                                                                              }
+                                                                                          ]
+                                                                   }
+                                                     },
+                                "useFilter":  true,
+                                "useDefault":  false
+                            },
+        "type":  "grid",
+        "summaryVisibility":  "Show",
+        "requiresTemplateOptions":  true,
+        "requiresKey":  true
+    }
+]
