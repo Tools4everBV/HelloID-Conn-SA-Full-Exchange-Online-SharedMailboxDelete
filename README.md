@@ -5,6 +5,12 @@ This HelloID Service Automation Delegated Form provides Exchange Online (Office3
  2. Delete the AD group with permissions to the shared mailbox
  3. Delete the Shared mailbox
 
+## Versioning
+| Version | Description | Date |
+| - | - | - |
+| 1.0.1   | Added version number and updated all-in-one script | 2021/11/16  |
+| 1.0.0   | Initial release | 2021/06/24  |
+
 <!-- TABLE OF CONTENTS -->
 ## Table of Contents
 * [Description](#description)
@@ -42,5 +48,8 @@ This Static data source the domain name for the mail address of the mailbox.
 ### Delegated form task 'Shared-mailbox-delete'
 This delegated form task will delete the shared mailbox in Exchange and the AD group with permissions.
 
-# HelloID Docs
+## Getting help
+_If you need help, feel free to ask questions on our [forum](https://forum.helloid.com/forum/helloid-connectors/service-automation/96-helloid-sa-exchange-online-delete-shared-mailbox)_
+
+## HelloID Docs
 The official HelloID documentation can be found at: https://docs.helloid.com/
