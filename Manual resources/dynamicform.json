@@ -1,61 +1,78 @@
 [
-    {
-        "key":  "searchfield",
-        "templateOptions":  {
-                                "label":  "Search",
-                                "required":  true
-                            },
-        "type":  "input",
-        "summaryVisibility":  "Show",
-        "requiresTemplateOptions":  true,
-        "requiresKey":  true
+  {
+    "templateOptions": {
+      "title": "Retrieving this information from Exchange Online takes an average of +/- 10 seconds.",
+      "titleField": "",
+      "bannerType": "Info",
+      "useBody": true
     },
-    {
-        "key":  "sharedMailbox",
-        "templateOptions":  {
-                                "label":  "Shared Mailboxes",
-                                "required":  true,
-                                "grid":  {
-                                             "columns":  [
-                                                             {
-                                                                 "headerName":  "Name",
-                                                                 "field":  "name"
-                                                             },
-                                                             {
-                                                                 "headerName":  "Primary Smtp Address",
-                                                                 "field":  "primarySmtpAddress"
-                                                             },
-                                                             {
-                                                                 "headerName":  "Id",
-                                                                 "field":  "id"
-                                                             },
-                                                             {
-                                                                 "headerName":  "User Principal Name",
-                                                                 "field":  "userPrincipalName"
-                                                             }
-                                                         ],
-                                             "height":  300,
-                                             "rowSelection":  "single"
-                                         },
-                                "dataSourceConfig":  {
-                                                         "dataSourceGuid":  "$dataSourceGuid_0",
-                                                         "input":  {
-                                                                       "propertyInputs":  [
-                                                                                              {
-                                                                                                  "propertyName":  "searchValue",
-                                                                                                  "otherFieldValue":  {
-                                                                                                                          "otherFieldKey":  "searchfield"
-                                                                                                                      }
-                                                                                              }
-                                                                                          ]
-                                                                   }
-                                                     },
-                                "useFilter":  true,
-                                "useDefault":  false
-                            },
-        "type":  "grid",
-        "summaryVisibility":  "Show",
-        "requiresTemplateOptions":  true,
-        "requiresKey":  true
-    }
+    "type": "textbanner",
+    "summaryVisibility": "Show",
+    "body": "Please wait so we can retreive the input.",
+    "requiresTemplateOptions": false,
+    "requiresKey": false,
+    "requiresDataSource": false
+  },
+  {
+    "key": "searchfield",
+    "templateOptions": {
+      "label": "Search",
+      "required": true
+    },
+    "type": "input",
+    "summaryVisibility": "Show",
+    "requiresTemplateOptions": true,
+    "requiresKey": true,
+    "requiresDataSource": false
+  },
+  {
+    "key": "sharedMailbox",
+    "templateOptions": {
+      "label": "Shared Mailboxes",
+      "required": true,
+      "grid": {
+        "columns": [
+          {
+            "headerName": "Name",
+            "field": "name"
+          },
+          {
+            "headerName": "Primary Smtp Address",
+            "field": "primarySmtpAddress"
+          },
+          {
+            "headerName": "Id",
+            "field": "id"
+          },
+          {
+            "headerName": "User Principal Name",
+            "field": "userPrincipalName"
+          }
+        ],
+        "height": 300,
+        "rowSelection": "single"
+      },
+      "dataSourceConfig": {
+        "dataSourceGuid": "$dataSourceGuid_0",
+        "input": {
+          "propertyInputs": [
+            {
+              "propertyName": "searchValue",
+              "otherFieldValue": {
+                "otherFieldKey": "searchfield"
+              }
+            }
+          ]
+        }
+      },
+      "useFilter": true,
+      "useDefault": false,
+      "allowCsvDownload": true
+    },
+    "type": "grid",
+    "summaryVisibility": "Show",
+    "requiresTemplateOptions": true,
+    "requiresKey": true,
+    "requiresDataSource": true
+  }
 ]
