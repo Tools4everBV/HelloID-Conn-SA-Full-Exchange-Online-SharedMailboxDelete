@@ -1,16 +1,17 @@
 #######################################################################
-# Template: HelloID SA Powershell data source
-# Name: Shared-mailbox-generate-table-delete
+# Template: HelloID SA Delegated form task
+# Name: Exchange Online Shared Mailbox - Delete
 # Date: 28-11-2024
 #######################################################################
 
-# For basic information about powershell data sources see:
-# https://docs.helloid.com/en/service-automation/dynamic-forms/data-sources/powershell-data-sources.html
+# For basic information about delegated form tasks see:
+# https://docs.helloid.com/en/service-automation/delegated-forms/delegated-form-powershell-scripts.html
 
 # Service automation variables:
 # https://docs.helloid.com/en/service-automation/service-automation-variables.html
 
 #region init
+
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
@@ -25,12 +26,16 @@ $Secret = $EntraSecret
 $Organization = $EntraOrganization
 
 # variables configured in form:
-$searchValue = $datasource.searchValue
-$searchQuery = "*$searchValue*"
+$exchangeMailGUID = $form.sharedMailbox.id
+$exchangeMailName = $form.sharedMailbox.name
 
 # PowerShell commands to import
-$commands = @("Get-User", "Get-Mailbox")
+$commands = @("Get-User", "Remove-Mailbox")
 #endregion init
+
+#region functions
+
+#endregion functions
 
 try {
     #region import module
@@ -86,40 +91,28 @@ try {
     Write-Information "Successfully connected to Exchange Online"
     #endregion connect to Exchange Online
 
-    #region check shared mailbox
-    $actionMessage = "getting shared mailbox"
-
-    if (-not [String]::IsNullOrEmpty($searchValue)) {
-        Write-information "searchQuery: $searchQuery"    
-            
-        $SharedMailboxParams = @{
-            Filter               = "{Alias -like '$searchQuery' -or Name -like '$searchQuery'}"
-            RecipientTypeDetails = "SharedMailbox"
-            ResultSize           = "Unlimited"
-            Verbose              = $false
-            ErrorAction          = "Stop"   
-        }
-
-        $mailboxes = Get-Mailbox @SharedMailboxParams
-
-        $resultCount = @($mailboxes).Count
-        
-        Write-Information "Result count: $resultCount"
-        
-        if ($resultCount -gt 0) {
-            foreach ($mailbox in $mailboxes) {
-                $returnObject = @{
-                    name               = "$($mailbox.displayName)";
-                    id                 = "$($mailbox.ExchangeGuid)";
-                    primarySmtpAddress = "$($mailbox.PrimarySmtpAddress)";
-                    userPrincipalName  = "$($mailbox.UserPrincipalName)"
-                }
-
-                Write-Output $returnObject
-            }
-        }
+    #region create shared mailbox
+    $actionMessage = "deleting shared mailbox"
+    $RemoveMailboxParams = @{
+        Identity    = $exchangeMailGUID
+        ErrorAction = 'Stop'
+        Confirm     = $false
     }
-    #endregion check shared mailbox           
+
+    Remove-Mailbox @RemoveMailboxParams
+
+    Write-Information  "Shared Mailbox [$exchangeMailName] deleted successfully" 
+    $Log = @{
+        Action            = "DeleteResource" # optional. ENUM (undefined = default) 
+        System            = "Exchange Online" # optional (free format text) 
+        Message           = "Shared Mailbox [$exchangeMailName] deleted successfully"  # required (free format text) 
+        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) 
+        TargetDisplayName = $exchangeMailName # optional (free format text) 
+        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) 
+    }
+    #send result back  
+    Write-Information -Tags "Audit" -MessageData $log
+    #endregion create shared mailbox
 }
 catch {
     $ex = $PSItem
@@ -131,6 +124,16 @@ catch {
         $errorMessage = $($ex.Exception.message)
     }
 
-    Write-Error "Error $actionMessage for Exchange Online shared mailbox with the query [$searchQuery]. Error: $errorMessage"
+    Write-Error "Error $actionMessage for Exchange Online shared mailbox [$exchangeMailName]. Error: $errorMessage"
+
+    $Log = @{
+        Action            = "CreateResource" # optional. ENUM (undefined = default) 
+        System            = "Exchange Online" # optional (free format text) 
+        Message           = "Error $actionMessage for Exchange Online shared mailbox [$exchangeMailName]" # required (free format text) 
+        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) 
+        TargetDisplayName = $exchangeMailName # optional (free format text) 
+        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) 
+    }
+    #send result back  
+    Write-Information -Tags "Audit" -MessageData $log
 }
-#endregion lookup
