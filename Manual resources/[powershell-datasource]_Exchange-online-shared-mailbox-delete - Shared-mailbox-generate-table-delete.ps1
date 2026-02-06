@@ -6,14 +6,12 @@ $InformationPreference = "Continue"
 $WarningPreference = "Continue"
 
 # variables configured in form:
-$exchangeMailGUID = $form.sharedMailbox.id
-$exchangeMailName = $form.sharedMailbox.name
+$searchValue = $datasource.searchValue
+$searchQuery = "*$searchValue*"
 
 # PowerShell commands to import
-$commands = @("Get-User", "Remove-Mailbox")
+$commands = @("Get-User", "Get-Mailbox")
 #endregion init
-
-#region functions
 function Get-MSEntraCertificate {
     [CmdletBinding()]
     param()
@@ -26,7 +24,6 @@ function Get-MSEntraCertificate {
         $PSCmdlet.ThrowTerminatingError($_)
     }
 }
-#endregion functions
 
 #region Import module & connect
 try {    
@@ -76,53 +73,54 @@ catch {
     Write-Error $auditMessage
 }
 
-try{ 
-    #region create shared mailbox
-    $actionMessage = "deleting shared mailbox"
-    $RemoveMailboxParams = @{
-        Identity    = $exchangeMailGUID
-        ErrorAction = 'Stop'
-        Confirm     = $false
-    }
 
-    Remove-Mailbox @RemoveMailboxParams
+try{
+    #region check shared mailbox
+    $actionMessage = "getting shared mailbox"
 
-    Write-Information  "Shared Mailbox [$exchangeMailName] deleted successfully" 
-    $Log = @{
-        Action            = "DeleteResource" # optional. ENUM (undefined = default) 
-        System            = "Exchange Online" # optional (free format text) 
-        Message           = "Shared Mailbox [$exchangeMailName] deleted successfully"  # required (free format text) 
-        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) 
-        TargetDisplayName = $exchangeMailName # optional (free format text) 
-        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) 
+    if (-not [String]::IsNullOrEmpty($searchValue)) {
+        Write-information "searchQuery: $searchQuery"    
+            
+        $SharedMailboxParams = @{
+            Filter               = "{Alias -like '$searchQuery' -or Name -like '$searchQuery'}"
+            RecipientTypeDetails = "SharedMailbox"
+            ResultSize           = "Unlimited"
+            Verbose              = $false
+            ErrorAction          = "Stop"   
+        }
+
+        $mailboxes = Get-Mailbox @SharedMailboxParams
+
+        $resultCount = @($mailboxes).Count
+        
+        Write-Information "Result count: $resultCount"
+        
+        if ($resultCount -gt 0) {
+            foreach ($mailbox in $mailboxes) {
+                $returnObject = @{
+                    name               = "$($mailbox.displayName)";
+                    id                 = "$($mailbox.ExchangeGuid)";
+                    primarySmtpAddress = "$($mailbox.PrimarySmtpAddress)";
+                    userPrincipalName  = "$($mailbox.UserPrincipalName)"
+                }
+
+                Write-Output $returnObject
+            }
+        }
     }
-    #send result back  
-    Write-Information -Tags "Audit" -MessageData $log
-    #endregion create shared mailbox
+    #endregion check shared mailbox           
 }
 catch {
     $ex = $PSItem
-    if (-not [string]::IsNullOrEmpty($ex.Exception.Data.RemoteException.Message)) {
-        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Data.RemoteException.Message)"
-        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Data.RemoteException.Message)"
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorMessage = ($ex.ErrorDetails.Message | Convertfrom-json).error_description
     }
     else {
-        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
-        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+        $errorMessage = $($ex.Exception.message)
     }
 
-    $Log = @{
-        Action            = "CreateResource" # optional. ENUM (undefined = default) 
-        System            = "Exchange Online" # optional (free format text) 
-        Message           = "Error $actionMessage for Exchange Online shared mailbox [$exchangeMailName]" # required (free format text) 
-        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) 
-        TargetDisplayName = $exchangeMailName # optional (free format text) 
-        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) 
-    }
-    Write-Information -Tags "Audit" -MessageData $log
-    Write-Warning $warningMessage
-    Write-Error $auditMessage
-    # exit # use when using multiple try/catch and the script must stop
+    Write-Error "Error $actionMessage for Exchange Online shared mailbox with the query [$searchQuery]. Error: $errorMessage"
 }
 finally {
     # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/disconnect-exchangeonline?view=exchange-ps
@@ -133,3 +131,4 @@ finally {
     $null = Disconnect-ExchangeOnline @deleteExchangeSessionSplatParams
     Write-Information "Disconnected from Microsoft Exchange Online"
 }
+#endregion lookup
