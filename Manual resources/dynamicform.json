@@ -1,78 +1,89 @@
 [
   {
-    "templateOptions": {
-      "title": "Retrieving this information from Exchange Online takes an average of +/- 10 seconds.",
-      "titleField": "",
-      "bannerType": "Info",
-      "useBody": true
-    },
-    "type": "textbanner",
-    "summaryVisibility": "Show",
-    "body": "Please wait so we can retreive the input.",
-    "requiresTemplateOptions": false,
-    "requiresKey": false,
-    "requiresDataSource": false
-  },
-  {
-    "key": "searchfield",
-    "templateOptions": {
-      "label": "Search",
-      "required": true
-    },
-    "type": "input",
-    "summaryVisibility": "Show",
-    "requiresTemplateOptions": true,
-    "requiresKey": true,
-    "requiresDataSource": false
-  },
-  {
-    "key": "sharedMailbox",
-    "templateOptions": {
-      "label": "Shared Mailboxes",
-      "required": true,
-      "grid": {
-        "columns": [
-          {
-            "headerName": "Name",
-            "field": "name"
-          },
-          {
-            "headerName": "Primary Smtp Address",
-            "field": "primarySmtpAddress"
-          },
-          {
-            "headerName": "Id",
-            "field": "id"
-          },
-          {
-            "headerName": "User Principal Name",
-            "field": "userPrincipalName"
-          }
-        ],
-        "height": 300,
-        "rowSelection": "single"
+    "label": "Select mailbox",
+    "fields": [
+      {
+        "templateOptions": {
+          "title": "Retrieving this information from Exchange takes an average of +/- 10 seconds. Please wait while the data is loaded.",
+          "titleField": "",
+          "bannerType": "Info",
+          "useBody": false
+        },
+        "type": "textbanner",
+        "summaryVisibility": "Hide element",
+        "body": "Text Banner Content",
+        "requiresTemplateOptions": false,
+        "requiresKey": false,
+        "requiresDataSource": false
       },
-      "dataSourceConfig": {
-        "dataSourceGuid": "$dataSourceGuid_0",
-        "input": {
-          "propertyInputs": [
-            {
-              "propertyName": "searchValue",
-              "otherFieldValue": {
-                "otherFieldKey": "searchfield"
+      {
+        "key": "searchMailbox",
+        "templateOptions": {
+          "label": "Search (wildcard search in Name and Email addresses)",
+          "placeholder": "Name or Email addresses (use * to search all shared mailboxes)",
+          "required": true
+        },
+        "type": "input",
+        "summaryVisibility": "Hide element",
+        "requiresTemplateOptions": true,
+        "requiresKey": true,
+        "requiresDataSource": false
+      },
+      {
+        "key": "gridMailbox",
+        "templateOptions": {
+          "label": "Mailbox",
+          "required": true,
+          "grid": {
+            "columns": [
+              {
+                "headerName": "Display Name",
+                "field": "DisplayName"
+              },
+              {
+                "headerName": "Primary Smtp Address",
+                "field": "PrimarySmtpAddress"
+              },
+              {
+                "headerName": "Email Addresses",
+                "field": "EmailAddresses"
+              },
+              {
+                "headerName": "Alias",
+                "field": "Alias"
+              },
+              {
+                "headerName": "Recipient Type Details",
+                "field": "RecipientTypeDetails"
               }
+            ],
+            "height": 300,
+            "rowSelection": "single"
+          },
+          "dataSourceConfig": {
+            "dataSourceGuid": "$dataSourceGuid_0",
+            "input": {
+              "propertyInputs": [
+                {
+                  "propertyName": "searchValue",
+                  "otherFieldValue": {
+                    "otherFieldKey": "searchMailbox"
+                  }
+                }
+              ]
             }
-          ]
-        }
-      },
-      "useFilter": true,
-      "useDefault": false,
-      "allowCsvDownload": true
-    },
-    "type": "grid",
-    "summaryVisibility": "Show",
-    "requiresTemplateOptions": true,
-    "requiresKey": true,
-    "requiresDataSource": true
+          },
+          "useFilter": true,
+          "useDefault": false,
+          "searchPlaceHolder": "Search this data",
+          "allowCsvDownload": false
+        },
+        "type": "grid",
+        "summaryVisibility": "Show",
+        "requiresTemplateOptions": true,
+        "requiresKey": true,
+        "requiresDataSource": true
+      }
+    ]
   }
 ]
