@@ -7,7 +7,7 @@ $portalUrl = "https://CUSTOMER.helloid.com"
 $apiKey = "API_KEY"
 $apiSecret = "API_SECRET"
 $delegatedFormAccessGroupNames = @("") #Only unique names are supported. Groups must exist!
-$delegatedFormCategories = @("mailbox Management","Office 365") #Only unique names are supported. Categories will be created if not exists
+$delegatedFormCategories = @("mailbox Management","Exchange Online") #Only unique names are supported. Categories will be created if not exists
 $script:debugLogging = $false #Default value: $false. If $true, the HelloID resource GUIDs will be shown in the logging
 $script:duplicateForm = $false #Default value: $false. If $true, the HelloID resource names will be changed to import a duplicate Form
 $script:duplicateFormSuffix = "_tmp" #the suffix will be added to all HelloID resource names to generate a duplicate form with different resource names
@@ -16,33 +16,41 @@ $script:duplicateFormSuffix = "_tmp" #the suffix will be added to all HelloID re
 #NOTE: You can also update the HelloID Global variable values afterwards in the HelloID Admin Portal: https://<CUSTOMER>.helloid.com/admin/variablelibrary
 $globalHelloIDVariables = [System.Collections.Generic.List[object]]@();
 
-#Global variable #1 >> EntraSecret
+#Global variable #1 >> EntraIdCertificateBase64String
 $tmpName = @'
-EntraSecret
+EntraIdCertificateBase64String
 '@ 
 $tmpValue = "" 
 $globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "True"});
 
-#Global variable #2 >> EntraTenantId
+#Global variable #2 >> EntraIDAppId
 $tmpName = @'
-EntraTenantId
-'@ 
-$tmpValue = "" 
-$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
-
-#Global variable #3 >> EntraAppID
-$tmpName = @'
-EntraAppID
-'@ 
-$tmpValue = "" 
-$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
-
-#Global variable #4 >> EntraOrganization
-$tmpName = @'
-EntraOrganization
+EntraIDAppId
 '@ 
 $tmpValue = @'
-domain.onmicrosoft.com
+'@ 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
+
+#Global variable #3 >> EntraIdCertificatePassword
+$tmpName = @'
+EntraIdCertificatePassword
+'@ 
+$tmpValue = "" 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "True"});
+
+#Global variable #4 >> EntraIdOrganization
+$tmpName = @'
+EntraIdOrganization
+'@ 
+$tmpValue = @'
+'@ 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
+
+#Global variable #5 >> EntraIDtenantID
+$tmpName = @'
+EntraIDtenantID
+'@ 
+$tmpValue = @'
 '@ 
 $globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
 
@@ -100,7 +108,7 @@ function Invoke-HelloIDGlobalVariable {
     try {
         $uri = ($script:PortalBaseUrl + "api/v1/automation/variables/named/$Name")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-    
+
         if ([string]::IsNullOrEmpty($response.automationVariableGuid)) {
             #Create Variable
             $body = @{
@@ -110,7 +118,7 @@ function Invoke-HelloIDGlobalVariable {
                 ItemType = 0;
             }    
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
+
             $uri = ($script:PortalBaseUrl + "api/v1/automation/variable")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
             $variableGuid = $response.automationVariableGuid
@@ -136,14 +144,14 @@ function Invoke-HelloIDAutomationTask {
         [parameter()][String][AllowEmptyString()]$ForceCreateTask,
         [parameter(Mandatory)][Ref]$returnObject
     )
-    
+
     $TaskName = $TaskName + $(if ($script:duplicateForm -eq $true) { $script:duplicateFormSuffix })
 
     try {
         $uri = ($script:PortalBaseUrl +"api/v1/automationtasks?search=$TaskName&container=$AutomationContainer")
         $responseRaw = (Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false) 
         $response = $responseRaw | Where-Object -filter {$_.name -eq $TaskName}
-    
+
         if([string]::IsNullOrEmpty($response.automationTaskGuid) -or $ForceCreateTask -eq $true) {
             #Create Task
 
@@ -156,7 +164,7 @@ function Invoke-HelloIDAutomationTask {
                 variables           = (ConvertFrom-Json-WithEmptyArray($Variables));
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
+
             $uri = ($script:PortalBaseUrl +"api/v1/automationtasks/powershell")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
             $taskGuid = $response.automationTaskGuid
@@ -183,6 +191,7 @@ function Invoke-HelloIDDatasource {
         [parameter()][String][AllowEmptyString()]$DatasourcePsScript,        
         [parameter()][String][AllowEmptyString()]$DatasourceInput,
         [parameter()][String][AllowEmptyString()]$AutomationTaskGuid,
+        [parameter()][String][AllowEmptyString()]$DatasourceRunInCloud,
         [parameter(Mandatory)][Ref]$returnObject
     )
 
@@ -194,11 +203,11 @@ function Invoke-HelloIDDatasource {
         "3" { "Task data source"; break} 
         "4" { "Powershell data source"; break}
     }
-    
+
     try {
         $uri = ($script:PortalBaseUrl +"api/v1/datasource/named/$DatasourceName")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-      
+    
         if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
             #Create DataSource
             $body = @{
@@ -209,12 +218,13 @@ function Invoke-HelloIDDatasource {
                 value              = (ConvertFrom-Json-WithEmptyArray($DatasourceStaticValue));
                 script             = $DatasourcePsScript;
                 input              = (ConvertFrom-Json-WithEmptyArray($DatasourceInput));
+                runInCloud         = $DatasourceRunInCloud;
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-      
+    
             $uri = ($script:PortalBaseUrl +"api/v1/datasource")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-              
+            
             $datasourceGuid = $response.dataSourceGUID
             Write-Information "$datasourceTypeName '$DatasourceName' created$(if ($script:debugLogging -eq $true) { ": " + $datasourceGuid })"
         } else {
@@ -223,7 +233,7 @@ function Invoke-HelloIDDatasource {
             Write-Warning "$datasourceTypeName '$DatasourceName' already exists$(if ($script:debugLogging -eq $true) { ": " + $datasourceGuid })"
         }
     } catch {
-      Write-Error "$datasourceTypeName '$DatasourceName', message: $_"
+        Write-Error "$datasourceTypeName '$DatasourceName', message: $_"
     }
 
     $returnObject.Value = $datasourceGuid
@@ -235,7 +245,7 @@ function Invoke-HelloIDDynamicForm {
         [parameter(Mandatory)][String]$FormSchema,
         [parameter(Mandatory)][Ref]$returnObject
     )
-    
+
     $FormName = $FormName + $(if ($script:duplicateForm -eq $true) { $script:duplicateFormSuffix })
 
     try {
@@ -245,7 +255,7 @@ function Invoke-HelloIDDynamicForm {
         } catch {
             $response = $null
         }
-    
+
         if(([string]::IsNullOrEmpty($response.dynamicFormGUID)) -or ($response.isUpdated -eq $true)) {
             #Create Dynamic form
             $body = @{
@@ -253,10 +263,10 @@ function Invoke-HelloIDDynamicForm {
                 FormSchema = (ConvertFrom-Json-WithEmptyArray($FormSchema));
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
+
             $uri = ($script:PortalBaseUrl +"api/v1/forms")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-    
+
             $formGuid = $response.dynamicFormGUID
             Write-Information "Dynamic form '$formName' created$(if ($script:debugLogging -eq $true) { ": " + $formGuid })"
         } else {
@@ -292,7 +302,7 @@ function Invoke-HelloIDDelegatedForm {
         } catch {
             $response = $null
         }
-    
+
         if([string]::IsNullOrEmpty($response.delegatedFormGUID)) {
             #Create DelegatedForm
             $body = @{
@@ -309,10 +319,10 @@ function Invoke-HelloIDDelegatedForm {
                 }
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
+
             $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-    
+
             $delegatedFormGuid = $response.delegatedFormGUID
             Write-Information "Delegated form '$DelegatedFormName' created$(if ($script:debugLogging -eq $true) { ": " + $delegatedFormGuid })"
             $delegatedFormCreated = $true
@@ -334,7 +344,6 @@ function Invoke-HelloIDDelegatedForm {
     $returnObject.value.created = $delegatedFormCreated
 }
 
-
 <# Begin: HelloID Global Variables #>
 foreach ($item in $globalHelloIDVariables) {
 	Invoke-HelloIDGlobalVariable -Name $item.name -Value $item.value -Secret $item.secret 
@@ -343,167 +352,181 @@ foreach ($item in $globalHelloIDVariables) {
 
 
 <# Begin: HelloID Data sources #>
-<# Begin: DataSource "Shared-mailbox-generate-table-delete" #>
+<# Begin: DataSource "Exchange online - Shared Mailbox - Delete exchange-online-shared-mailbox-update | EXO-Get-Shared-Mailboxes-Wildcard-Name-EmailAddresses" #>
 $tmpPsScript = @'
-#######################################################################
-# Template: HelloID SA Powershell data source
-# Name: Shared-mailbox-generate-table-delete
-# Date: 28-11-2024
-#######################################################################
+# Variables configured in form
+$searchValue = $datasource.searchValue
+if ($searchValue -eq "*") {
+    $filter = "RecipientTypeDetails -eq 'SharedMailbox'"
+}
+else {
+    $filter = "(Name -like '*$searchValue*' -or EmailAddresses -like '*$searchValue*') -and RecipientTypeDetails -eq 'SharedMailbox'"
+}
 
-# For basic information about powershell data sources see:
-# https://docs.helloid.com/en/service-automation/dynamic-forms/data-sources/powershell-data-sources.html
+# Global variables
+# Outcommented as these are set from Global Variables
+# $EntraIdTenantId = ""
+# $EntraIdAppId = ""
+# $EntraIdCertificateBase64String = ""
+# $EntraIdCertificatePassword = ""
 
-# Service automation variables:
-# https://docs.helloid.com/en/service-automation/service-automation-variables.html
+# Fixed values
+# Properties to select - Select only needed properties to limit memory usage and speed up processing
+$propertiesToSelect = @(
+    "Id"
+    , "Guid"
+    , "ExchangeGuid"
+    , "ExternalDirectoryObjectId"
+    , "DisplayName"
+    , "PrimarySmtpAddress"
+    , "EmailAddresses"
+    , "Alias"
+    , "RecipientTypeDetails"
+)
 
-#region init
+# PowerShell commands to import
+# Use Get-EXORecipient instead of Get-Mailbox as Get-EXORecipient is faster
+$commands = @(
+    "Get-Recipient"
+    , "Get-EXORecipient"
+)
+
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
+# Set debug logging
 $VerbosePreference = "SilentlyContinue"
 $InformationPreference = "Continue"
 $WarningPreference = "Continue"
 
-# global variables (Automation --> Variable libary):
-$TenantId = $EntraTenantId
-$AppID = $EntraAppID
-$Secret = $EntraSecret
-$Organization = $EntraOrganization
-
-# variables configured in form:
-$searchValue = $datasource.searchValue
-$searchQuery = "*$searchValue*"
-
-# PowerShell commands to import
-$commands = @("Get-User", "Get-Mailbox")
-#endregion init
+#region functions
+function Get-MSEntraCertificate {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $CertificateBase64String,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $CertificatePassword
+    )
+    try {
+        $rawCertificate = [system.convert]::FromBase64String($CertificateBase64String)
+        $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawCertificate, $CertificatePassword, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+        Write-Output $certificate
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($_)
+    }
+}
+#endregion functions
 
 try {
-    #region import module
-    $actionMessage = "importing $moduleName module"
-
-    $importModuleParams = @{
+    # Import module
+    $actionMessage = "importing module [ExchangeOnlineManagement]"
+        
+    $importModuleSplatParams = @{
         Name        = "ExchangeOnlineManagement"
         Cmdlet      = $commands
-        ErrorAction = 'Stop'
+        Verbose     = $false
+        ErrorAction = "Stop"
     }
 
-    Import-Module @importModuleParams
-    #endregion import module
+    $null = Import-Module @importModuleSplatParams
 
-    #region create access token
-    Write-Verbose "Creating Access Token"
-    $actionMessage = "creating access token"
-        
-    $body = @{
-        grant_type    = "client_credentials"
-        client_id     = "$AppID"
-        client_secret = "$Secret"
-        resource      = "https://outlook.office365.com"
+    # Convert base64 certificate string to certificate object
+    $actionMessage = "converting base64 certificate string to certificate object"
+
+    $certificate = Get-MSEntraCertificate -CertificateBase64String $EntraIdCertificateBase64String -CertificatePassword $EntraIdCertificatePassword
+
+    # Connect to Microsoft Exchange Online
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/connect-exchangeonline?view=exchange-ps
+    $actionMessage = "connecting to Microsoft Exchange Online"
+
+    $createExchangeSessionSplatParams = @{
+        Organization          = $EntraIdOrganization
+        AppID                 = $EntraIdAppId
+        Certificate           = $certificate
+        CommandName           = $commands
+        ShowBanner            = $false
+        ShowProgress          = $false
+        TrackPerformance      = $false
+        SkipLoadingCmdletHelp = $true
+        SkipLoadingFormatData = $true
+        ErrorAction           = "Stop"
     }
 
-    $exchangeAccessTokenParams = @{
-        Method          = 'POST'
-        Uri             = "https://login.microsoftonline.com/$TenantId/oauth2/token"
-        Body            = $body
-        ContentType     = 'application/x-www-form-urlencoded'
-        UseBasicParsing = $true
+    $null = Connect-ExchangeOnline @createExchangeSessionSplatParams
+
+    # Get Mailboxes
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-exorecipient?view=exchange-ps
+    $actionMessage = "querying shared mailboxes that match filter [$($filter)]"
+
+    $getMailboxesSplatParams = @{
+        RecipientTypeDetails = "SharedMailbox"
+        ResultSize           = "Unlimited"
+        Filter               = $filter
+        Properties           = $propertiesToSelect
+        ErrorAction          = 'Stop'
     }
-        
-    $accessToken = (Invoke-RestMethod @exchangeAccessTokenParams).access_token
-    #endregion create access token
 
-    #region connect to Exchange Online
-    Write-Verbose "Connecting to Exchange Online"
-    $actionMessage = "connecting to Exchange Online"
+    $mailboxes = Get-EXORecipient @getMailboxesSplatParams | Select-Object -Property $propertiesToSelect
+    Write-Information "Queried shared mailboxes that match filter [$($filter)]. Result count: $(($mailboxes | Measure-Object).Count)"
 
-    $exchangeSessionParams = @{
-        Organization     = $Organization
-        AppID            = $AppID
-        AccessToken      = $accessToken
-        CommandName      = $commands
-        ShowBanner       = $false
-        ShowProgress     = $false
-        TrackPerformance = $false
-        ErrorAction      = 'Stop'
-    }
-    Connect-ExchangeOnline @exchangeSessionParams
-        
-    Write-Information "Successfully connected to Exchange Online"
-    #endregion connect to Exchange Online
-
-    #region check shared mailbox
-    $actionMessage = "getting shared mailbox"
-
-    if (-not [String]::IsNullOrEmpty($searchValue)) {
-        Write-information "searchQuery: $searchQuery"    
-            
-        $SharedMailboxParams = @{
-            Filter               = "{Alias -like '$searchQuery' -or Name -like '$searchQuery'}"
-            RecipientTypeDetails = "SharedMailbox"
-            ResultSize           = "Unlimited"
-            Verbose              = $false
-            ErrorAction          = "Stop"   
-        }
-
-        $mailboxes = Get-Mailbox @SharedMailboxParams
-
-        $resultCount = @($mailboxes).Count
-        
-        Write-Information "Result count: $resultCount"
-        
-        if ($resultCount -gt 0) {
-            foreach ($mailbox in $mailboxes) {
-                $returnObject = @{
-                    name               = "$($mailbox.displayName)";
-                    id                 = "$($mailbox.ExchangeGuid)";
-                    primarySmtpAddress = "$($mailbox.PrimarySmtpAddress)";
-                    userPrincipalName  = "$($mailbox.UserPrincipalName)"
-                }
-
-                Write-Output $returnObject
-            }
-        }
-    }
-    #endregion check shared mailbox           
+    # Sort and Send results to HelloID
+    $actionMessage = "sending results to HelloID"
+    $mailboxes | Sort-Object -Property DisplayName | ForEach-Object {
+        Write-Output $_
+    } 
 }
 catch {
     $ex = $PSItem
-    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
-        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-        $errorMessage = ($ex.ErrorDetails.Message | Convertfrom-json).error_description
+    if (-not [string]::IsNullOrEmpty($ex.Exception.Data.RemoteException.Message)) {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Data.RemoteException.Message)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Data.RemoteException.Message)"
     }
     else {
-        $errorMessage = $($ex.Exception.message)
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
     }
-
-    Write-Error "Error $actionMessage for Exchange Online shared mailbox with the query [$searchQuery]. Error: $errorMessage"
+    Write-Warning $warningMessage
+    Write-Error $auditMessage
+    # exit # use when using multiple try/catch and the script must stop
 }
-#endregion lookup
+finally {
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/disconnect-exchangeonline?view=exchange-ps
+    $deleteExchangeSessionSplatParams = @{
+        Confirm     = $false
+        ErrorAction = "Stop"
+    }
+    $null = Disconnect-ExchangeOnline @deleteExchangeSessionSplatParams
+}
 '@ 
 $tmpModel = @'
-[{"key":"primarySmtpAddress","type":0},{"key":"userPrincipalName","type":0},{"key":"id","type":0},{"key":"name","type":0}]
+[{"key":"Id","type":0},{"key":"Guid","type":0},{"key":"ExchangeGuid","type":0},{"key":"ExternalDirectoryObjectId","type":0},{"key":"DisplayName","type":0},{"key":"PrimarySmtpAddress","type":0},{"key":"EmailAddresses","type":0},{"key":"Alias","type":0},{"key":"RecipientTypeDetails","type":0},{"key":"mailPrefix","type":0},{"key":"mailDomain","type":0}]
 '@ 
 $tmpInput = @'
 [{"description":null,"translateDescription":false,"inputFieldType":1,"key":"searchValue","type":0,"options":1}]
 '@ 
 $dataSourceGuid_0 = [PSCustomObject]@{} 
 $dataSourceGuid_0_Name = @'
-Shared-mailbox-generate-table-delete
+Exchange online - Shared Mailbox - Delete exchange-online-shared-mailbox-update | EXO-Get-Shared-Mailboxes-Wildcard-Name-EmailAddresses
 '@ 
-Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_0_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_0) 
-<# End: DataSource "Shared-mailbox-generate-table-delete" #>
+Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_0_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -DataSourceRunInCloud "False" -returnObject ([Ref]$dataSourceGuid_0) 
+<# End: DataSource "Exchange online - Shared Mailbox - Delete exchange-online-shared-mailbox-update | EXO-Get-Shared-Mailboxes-Wildcard-Name-EmailAddresses" #>
 <# End: HelloID Data sources #>
 
-<# Begin: Dynamic Form "Exchange Online Shared Mailbox - Delete" #>
+<# Begin: Dynamic Form "Exchange online - Shared Mailbox - Delete" #>
 $tmpSchema = @"
-[{"templateOptions":{"title":"Retrieving this information from Exchange Online takes an average of +/- 10 seconds.","titleField":"","bannerType":"Info","useBody":true},"type":"textbanner","summaryVisibility":"Show","body":"Please wait so we can retreive the input.","requiresTemplateOptions":false,"requiresKey":false,"requiresDataSource":false},{"key":"searchfield","templateOptions":{"label":"Search","required":true},"type":"input","summaryVisibility":"Show","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":false},{"key":"sharedMailbox","templateOptions":{"label":"Shared Mailboxes","required":true,"grid":{"columns":[{"headerName":"Name","field":"name"},{"headerName":"Primary Smtp Address","field":"primarySmtpAddress"},{"headerName":"Id","field":"id"},{"headerName":"User Principal Name","field":"userPrincipalName"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_0","input":{"propertyInputs":[{"propertyName":"searchValue","otherFieldValue":{"otherFieldKey":"searchfield"}}]}},"useFilter":true,"useDefault":false,"allowCsvDownload":true},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":true}]
+[{"label":"Select mailbox","fields":[{"templateOptions":{"title":"Retrieving this information from Exchange takes an average of +/- 10 seconds. Please wait while the data is loaded.","titleField":"","bannerType":"Info","useBody":false},"type":"textbanner","summaryVisibility":"Hide element","body":"Text Banner Content","requiresTemplateOptions":false,"requiresKey":false,"requiresDataSource":false},{"key":"searchMailbox","templateOptions":{"label":"Search (wildcard search in Name and Email addresses)","placeholder":"Name or Email addresses (use * to search all shared mailboxes)","required":true},"type":"input","summaryVisibility":"Hide element","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":false},{"key":"gridMailbox","templateOptions":{"label":"Mailbox","required":true,"grid":{"columns":[{"headerName":"Display Name","field":"DisplayName"},{"headerName":"Primary Smtp Address","field":"PrimarySmtpAddress"},{"headerName":"Email Addresses","field":"EmailAddresses"},{"headerName":"Alias","field":"Alias"},{"headerName":"Recipient Type Details","field":"RecipientTypeDetails"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_0","input":{"propertyInputs":[{"propertyName":"searchValue","otherFieldValue":{"otherFieldKey":"searchMailbox"}}]}},"useFilter":true,"useDefault":false,"searchPlaceHolder":"Search this data","allowCsvDownload":false},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":true}]}]
 "@ 
 
 $dynamicFormGuid = [PSCustomObject]@{} 
 $dynamicFormName = @'
-Exchange Online Shared Mailbox - Delete
+Exchange online - Shared Mailbox - Delete
 '@ 
 Invoke-HelloIDDynamicForm -FormName $dynamicFormName -FormSchema $tmpSchema  -returnObject ([Ref]$dynamicFormGuid) 
 <# END: Dynamic Form #>
@@ -517,7 +540,7 @@ if(-not[String]::IsNullOrEmpty($delegatedFormAccessGroupNames)){
             $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
             $delegatedFormAccessGroupGuid = $response.groupGuid
             $delegatedFormAccessGroupGuids += $delegatedFormAccessGroupGuid
-            
+        
             Write-Information "HelloID (access)group '$group' successfully found$(if ($script:debugLogging -eq $true) { ": " + $delegatedFormAccessGroupGuid })"
         } catch {
             Write-Error "HelloID (access)group '$group', message: $_"
@@ -534,10 +557,10 @@ foreach($category in $delegatedFormCategories) {
         $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories/$category")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
         $response = $response | Where-Object {$_.name.en -eq $category}
-        
+    
         $tmpGuid = $response.delegatedFormCategoryGuid
         $delegatedFormCategoryGuids += $tmpGuid
-        
+    
         Write-Information "HelloID Delegated Form category '$category' successfully found$(if ($script:debugLogging -eq $true) { ": " + $tmpGuid })"
     } catch {
         Write-Warning "HelloID Delegated Form category '$category' not found"
@@ -560,12 +583,12 @@ $delegatedFormCategoryGuids = (ConvertTo-Json -InputObject $delegatedFormCategor
 <# Begin: Delegated Form #>
 $delegatedFormRef = [PSCustomObject]@{guid = $null; created = $null} 
 $delegatedFormName = @'
-Exchange Online - Shared Mailbox - Delete
+Exchange online - Shared Mailbox - Delete
 '@
 $tmpTask = @'
-{"name":"Exchange Online - Shared Mailbox - Delete","script":"#######################################################################\r\n# Template: HelloID SA Delegated form task\r\n# Name: Exchange Online Shared Mailbox - Delete\r\n# Date: 28-11-2024\r\n#######################################################################\r\n\r\n# For basic information about delegated form tasks see:\r\n# https://docs.helloid.com/en/service-automation/delegated-forms/delegated-form-powershell-scripts.html\r\n\r\n# Service automation variables:\r\n# https://docs.helloid.com/en/service-automation/service-automation-variables.html\r\n\r\n#region init\r\n\r\n# Enable TLS1.2\r\n[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12\r\n\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$InformationPreference = \"Continue\"\r\n$WarningPreference = \"Continue\"\r\n\r\n# global variables (Automation --> Variable libary):\r\n$TenantId = $EntraTenantId\r\n$AppID = $EntraAppID\r\n$Secret = $EntraSecret\r\n$Organization = $EntraOrganization\r\n\r\n# variables configured in form:\r\n$exchangeMailGUID = $form.sharedMailbox.id\r\n$exchangeMailName = $form.sharedMailbox.name\r\n\r\n# PowerShell commands to import\r\n$commands = @(\"Get-User\", \"Remove-Mailbox\")\r\n#endregion init\r\n\r\n#region functions\r\n\r\n#endregion functions\r\n\r\ntry {\r\n    #region import module\r\n    $actionMessage = \"importing $moduleName module\"\r\n\r\n    $importModuleParams = @{\r\n        Name        = \"ExchangeOnlineManagement\"\r\n        Cmdlet      = $commands\r\n        ErrorAction = 'Stop'\r\n    }\r\n\r\n    Import-Module @importModuleParams\r\n    #endregion import module\r\n\r\n    #region create access token\r\n    Write-Verbose \"Creating Access Token\"\r\n    $actionMessage = \"creating access token\"\r\n        \r\n    $body = @{\r\n        grant_type    = \"client_credentials\"\r\n        client_id     = \"$AppID\"\r\n        client_secret = \"$Secret\"\r\n        resource      = \"https://outlook.office365.com\"\r\n    }\r\n\r\n    $exchangeAccessTokenParams = @{\r\n        Method          = 'POST'\r\n        Uri             = \"https://login.microsoftonline.com/$TenantId/oauth2/token\"\r\n        Body            = $body\r\n        ContentType     = 'application/x-www-form-urlencoded'\r\n        UseBasicParsing = $true\r\n    }\r\n        \r\n    $accessToken = (Invoke-RestMethod @exchangeAccessTokenParams).access_token\r\n    #endregion create access token\r\n\r\n    #region connect to Exchange Online\r\n    Write-Verbose \"Connecting to Exchange Online\"\r\n    $actionMessage = \"connecting to Exchange Online\"\r\n\r\n    $exchangeSessionParams = @{\r\n        Organization     = $Organization\r\n        AppID            = $AppID\r\n        AccessToken      = $accessToken\r\n        CommandName      = $commands\r\n        ShowBanner       = $false\r\n        ShowProgress     = $false\r\n        TrackPerformance = $false\r\n        ErrorAction      = 'Stop'\r\n    }\r\n    Connect-ExchangeOnline @exchangeSessionParams\r\n        \r\n    Write-Information \"Successfully connected to Exchange Online\"\r\n    #endregion connect to Exchange Online\r\n\r\n    #region create shared mailbox\r\n    $actionMessage = \"deleting shared mailbox\"\r\n    $RemoveMailboxParams = @{\r\n        Identity    = $exchangeMailGUID\r\n        ErrorAction = 'Stop'\r\n        Confirm     = $false\r\n    }\r\n\r\n    Remove-Mailbox @RemoveMailboxParams\r\n\r\n    Write-Information  \"Shared Mailbox [$exchangeMailName] deleted successfully\" \r\n    $Log = @{\r\n        Action            = \"DeleteResource\" # optional. ENUM (undefined = default) \r\n        System            = \"Exchange Online\" # optional (free format text) \r\n        Message           = \"Shared Mailbox [$exchangeMailName] deleted successfully\"  # required (free format text) \r\n        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n        TargetDisplayName = $exchangeMailName # optional (free format text) \r\n        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) \r\n    }\r\n    #send result back  \r\n    Write-Information -Tags \"Audit\" -MessageData $log\r\n    #endregion create shared mailbox\r\n}\r\ncatch {\r\n    $ex = $PSItem\r\n    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or\r\n        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {\r\n        $errorMessage = ($ex.ErrorDetails.Message | Convertfrom-json).error_description\r\n    }\r\n    else {\r\n        $errorMessage = $($ex.Exception.message)\r\n    }\r\n\r\n    Write-Error \"Error $actionMessage for Exchange Online shared mailbox [$exchangeMailName]. Error: $errorMessage\"\r\n\r\n    $Log = @{\r\n        Action            = \"CreateResource\" # optional. ENUM (undefined = default) \r\n        System            = \"Exchange Online\" # optional (free format text) \r\n        Message           = \"Error $actionMessage for Exchange Online shared mailbox [$exchangeMailName]\" # required (free format text) \r\n        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n        TargetDisplayName = $exchangeMailName # optional (free format text) \r\n        TargetIdentifier  = $([string]$exchangeMailGUID) # optional (free format text) \r\n    }\r\n    #send result back  \r\n    Write-Information -Tags \"Audit\" -MessageData $log\r\n}","runInCloud":false}
+{"name":"Exchange online - Shared Mailbox - Delete","script":"# variables configured in form\n$mailbox = $form.gridMailbox\n\n# Global variables\n# Outcommented as these are set from Global Variables\n# $EntraIdOrganization = \"\"\n# $EntraIdAppId = \"\"\n# $EntraIdCertificateBase64String = \"\"\n# $EntraIdCertificatePassword = \"\"\n\n# Fixed values\n$commands = @(\n    \"Remove-Mailbox\"\n)\n\n# Enable TLS1.2\n[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12\n\n# Set debug logging\n$VerbosePreference = \"SilentlyContinue\"\n$InformationPreference = \"Continue\"\n$WarningPreference = \"Continue\"\n\n#region functions\nfunction Get-MSEntraCertificate {\n    [CmdletBinding()]\n    param(\n        [Parameter(Mandatory)]\n        [ValidateNotNullOrEmpty()]\n        [string]\n        $CertificateBase64String,\n        \n        [Parameter(Mandatory)]\n        [ValidateNotNullOrEmpty()]\n        [string]\n        $CertificatePassword\n    )\n    try {\n        $rawCertificate = [system.convert]::FromBase64String($CertificateBase64String)\n        $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($rawCertificate, $CertificatePassword, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)\n        Write-Output $certificate\n    }\n    catch {\n        $PSCmdlet.ThrowTerminatingError($_)\n    }\n}\n#endregion functions\n\ntry {\n    # Import module\n    $actionMessage = \"importing module [ExchangeOnlineManagement]\"\n        \n    $importModuleSplatParams = @{\n        Name        = \"ExchangeOnlineManagement\"\n        Cmdlet      = $commands\n        Verbose     = $false\n        ErrorAction = \"Stop\"\n    }\n\n    $null = Import-Module @importModuleSplatParams\n\n    Write-Verbose \"Imported module [ExchangeOnlineManagement]\"\n\n    # Convert base64 certificate string to certificate object\n    $actionMessage = \"converting base64 certificate string to certificate object\"\n\n    $certificate = Get-MSEntraCertificate -CertificateBase64String $EntraIdCertificateBase64String -CertificatePassword $EntraIdCertificatePassword\n\n    Write-Verbose \"Converted base64 certificate string to certificate object\"\n\n    # Connect to Microsoft Exchange Online\n    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/connect-exchangeonline?view=exchange-ps\n    $actionMessage = \"connecting to Microsoft Exchange Online\"\n\n    $createExchangeSessionSplatParams = @{\n        Organization          = $EntraIdOrganization\n        AppID                 = $EntraIdAppId\n        Certificate           = $certificate\n        CommandName           = $commands\n        ShowBanner            = $false\n        ShowProgress          = $false\n        TrackPerformance      = $false\n        SkipLoadingCmdletHelp = $true\n        SkipLoadingFormatData = $true\n        ErrorAction           = \"Stop\"\n    }\n\n    $null = Connect-ExchangeOnline @createExchangeSessionSplatParams\n\n    # Remove shared mailbox\n    $actionMessage = \"deleting shared mailbox with PrimarySmtpAddress [$($mailbox.PrimarySmtpAddress)]\"\n\n    $deleteMailboxParams = @{\n        Identity    = $mailbox.PrimarySmtpAddress\n        Confirm     = $false\n        ErrorAction = 'Stop'\n    }\n\n    $null = Remove-Mailbox @deleteMailboxParams\n\n    # Send auditlog to HelloID\n    $Log = @{\n        Action            = \"DeleteResource\" # optional. ENUM (undefined = default) \n        System            = \"ExchangeOnline\" # optional (free format text) \n        Message           = \"Deleted shared mailbox with PrimarySmtpAddress [$($mailbox.PrimarySmtpAddress)]\"  # required (free format text) \n        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \n        TargetDisplayName = $mailbox.DisplayName # optional (free format text) \n        TargetIdentifier  = $mailbox.PrimarySmtpAddress # optional (free format text) \n    }\n    Write-Information -Tags \"Audit\" -MessageData $log\n}\ncatch {\n    $ex = $PSItem\n    if (-not [string]::IsNullOrEmpty($ex.Exception.Data.RemoteException.Message)) {\n        $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Data.RemoteException.Message)\"\n        $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Data.RemoteException.Message)\"\n    }\n    else {\n        $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)\"\n        $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Message)\"\n    }\n\n    $Log = @{\n        Action            = \"DeleteResource\" # optional. ENUM (undefined = default) \n        System            = \"ExchangeOnline\" # optional (free format text) \n        Message           = $auditMessage # required (free format text) \n        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \n        TargetDisplayName = $mailbox.DisplayName # optional (free format text) \n        TargetIdentifier  = $mailbox.PrimarySmtpAddress # optional (free format text) \n    }\n    \n    Write-Information -Tags \"Audit\" -MessageData $log\n    Write-Warning $warningMessage\n    Write-Error $auditMessage\n}\nfinally {\n    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/disconnect-exchangeonline?view=exchange-ps\n    $deleteExchangeSessionSplatParams = @{\n        Confirm     = $false\n        ErrorAction = \"Stop\"\n    }\n    $null = Disconnect-ExchangeOnline @deleteExchangeSessionSplatParams\n}","runInCloud":false}
 '@ 
 
-Invoke-HelloIDDelegatedForm -DelegatedFormName $delegatedFormName -DynamicFormGuid $dynamicFormGuid -AccessGroups $delegatedFormAccessGroupGuids -Categories $delegatedFormCategoryGuids -UseFaIcon "True" -FaIcon "fa fa-inbox" -task $tmpTask -returnObject ([Ref]$delegatedFormRef) 
+Invoke-HelloIDDelegatedForm -DelegatedFormName $delegatedFormName -DynamicFormGuid $dynamicFormGuid -AccessGroups $delegatedFormAccessGroupGuids -Categories $delegatedFormCategoryGuids -UseFaIcon "True" -FaIcon "fa fa-trash" -task $tmpTask -returnObject ([Ref]$delegatedFormRef) 
 <# End: Delegated Form #>
 
